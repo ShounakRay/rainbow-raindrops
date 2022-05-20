@@ -3,16 +3,20 @@
 # @Email:  shounak@stanford.edu
 # @Filename: playground.py
 # @Last modified by:   shounak
-# @Last modified time: 2022-05-20T01:15:46-07:00
+# @Last modified time: 2022-05-20T04:09:24-07:00
 
 import collections
 import numpy as np
-from math import log2, pow
 import subprocess
 import librosa.display
 import librosa
+import math
 import matplotlib.pyplot as plt
 import seaborn as sns
+from scipy import signal
+from sklearn.preprocessing import MinMaxScaler
+from music21 import note, stream
+import mingus.core.notes as notes
 
 _ = """########################################################################
 ############################### INSTALLATION NOTES ############################
@@ -69,6 +73,7 @@ CODEC_MAPPING = {'mp4': 'libx264',
                  'wav': 'libvorbis',
                  'm4a': 'libfdk_aac'}
 PIANO_RANGE = (27, 4186)
+SENTINEL_OOB = -1
 
 _ = """########################################################################
 ################################## DEFINTIONS #################################
@@ -78,16 +83,47 @@ _ = """########################################################################
 #     return os.path.isfile(fname)
 
 
-def get_note(freq):
-    """https://www.johndcook.com/blog/2016/02/10/musical-pitch-notation/."""
-    A4 = 440
-    C0 = A4 * pow(2, -4.75)
-    NAME = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+def frequency_to_note(frequency):
+    if frequency <= 0:
+        return 'Impossible' + str(SENTINEL_OOB)
+    # define constants that control the algorithm
+    NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#',
+             'A', 'A#', 'B']  # these are the 12 notes in each octave
+    OCTAVE_MULTIPLIER = 2  # going up an octave multiplies by 2
+    KNOWN_NOTE_NAME, KNOWN_NOTE_OCTAVE, KNOWN_NOTE_FREQUENCY = (
+        'A', 4, 440)  # A4 = 440 Hz
 
-    h = round(12 * log2(freq / C0))
-    octave = h // 12
-    n = h % 12
-    return NAME[n] + str(octave)
+    """
+    calculate the distance to the known note since notes are spread evenly,
+    going up a note will multiply bya constant so we can use log to know how
+    many times a frequency was multiplied to get from the known note to our
+    note this will give a positive integer value for notes higher than the
+    known note, and a negative value for notes lower than it (and zero for the
+    same note)
+    """
+    note_multiplier = OCTAVE_MULTIPLIER**(1 / len(NOTES))
+    frequency_relative_to_known_note = frequency / KNOWN_NOTE_FREQUENCY
+    distance_from_known_note = math.log(
+        frequency_relative_to_known_note, note_multiplier)
+
+    # round to make up for floating point inaccuracies
+    distance_from_known_note = round(distance_from_known_note)
+
+    """
+    using the distance in notes and the octave and name of the known note,
+    we can calculate the octave and name of our note
+    NOTE: the "absolute index" doesn't have any actual meaning, since it doesn't care what its zero point is. it is just useful for calculation
+    """
+    known_note_index_in_octave = NOTES.index(KNOWN_NOTE_NAME)
+    known_note_absolute_index = KNOWN_NOTE_OCTAVE * \
+        len(NOTES) + known_note_index_in_octave
+    note_absolute_index = known_note_absolute_index + distance_from_known_note
+    note_octave, note_index_in_octave = note_absolute_index // len(
+        NOTES), note_absolute_index % len(NOTES)
+    if not (note_octave >= 1 and note_octave <= 7):
+        return 'Impossible' + str(SENTINEL_OOB)
+    note_name = NOTES[note_index_in_octave]
+    return note_name + str(note_octave)
 
 
 def convert_file(input_path, output_path):
@@ -181,34 +217,112 @@ def plot_modified_spectrogram(spectrum, PIANO_RANGE=PIANO_RANGE, masked=True,
     return spectrum
 
 
-def plot_entire_freq_hist(spectrum):
-    _ = plt.figure(figsize=(25, 15))
-    _ = plt.plot(spectrum)
+def util_normalize(data, range=(0, 1)):
+    scaler = MinMaxScaler(feature_range=(range[0], range[1]))
+    res = scaler.fit_transform(data.reshape(-1, 1))
+    return [int(i) for i in res]
+
+
+def util_valid_note(the_note):
+    return notes.is_valid_note(the_note)
+
+
+def util_rm_octave(the_full_note):
+    return ''.join([i for i in the_full_note if not i.isdigit()])
+
+
+def plot_note_series(series_of_notes):
+    """ASSUMPTION: type list and all caps."""
+    stream1 = stream.Stream()
+    for p_note in all_unique_notes:
+        if not util_valid_note(util_rm_octave(p_note)):
+            print(f'{p_note} is an invalid note. Skipping.')
+        n_obj = note.Note(p_note)
+        stream1.append(n_obj)
+    stream1.show()
+
+# def plot_entire_freq_hist(spectrum):
+#     _ = plt.figure(figsize=(25, 15))
+#     _ = plt.plot(spectrum)
 
 
 _ = """########################################################################
 ################################# CORE EXECUTION ##############################
 ############################################################################"""
 
-# 1. Get the file path to an included audio example
+# IMPORTS
 # filename = librosa.example('nutcracker')
 fname = 'piano_A_sharp'
 output_path = convert_file(input_path=f'music_files/{fname}.mp3',
                            output_path=f'music_files/converted-{fname}.wav')
 
-# 2. Load the audio as a waveform `y`
-#    Store the sampling rate as `sr`
+# GET DATA
 waveform, sampling_rate = librosa.load(output_path)
 
+""" EXPLORATORY ANALYSIS """
 plot_waveform(waveform)
-
 STFT_DB_waveform = librosa_plot_spectrogram(waveform)
-
 # spectrum, row_freqs, col_mpoints = plot_spectrogram(waveform, sampling_rate)
 # plot_entire_freq_hist(spectrum)
-
 original_chroma, index_mapping = librosa_plot_chroma(waveform, sampling_rate)
+""" END """
 
+""" ACTUAL PROCESSING """
+frequencies, times, spectrogram = signal.spectrogram(waveform, sampling_rate)
+
+# > Yet another spectrogram plot
+# _ = plt.figure(figsize=(12, 30))
+# _ = plt.pcolormesh(times, frequencies, spectrogram)
+# # plt.imshow(spectrogram)
+# plt.ylabel('Frequency [Hz]')
+# plt.xlabel('Time [sec]')
+# plt.show()
+# _ = plt.figure(figsize=(12, 30))
+# _ = sns.heatmap(np.flipud(spectrogram))
+
+# Mapping of (0, 129) to actual Hz markings
+spectrogram_to_use = np.flipud(spectrogram)
+spect_indices = np.array([i for i in range(len(spectrogram_to_use))])
+normalized = util_normalize(
+    spect_indices, (min(frequencies), max(frequencies)))
+freq_mapping = dict(zip(spect_indices, normalized))
+
+# Ignore all data (0-out) outside of piano range
+filtered_spectrogram = []
+for i in range(len(spectrogram_to_use)):
+    corrs_freq = freq_mapping.get(i)
+    if corrs_freq >= 27.5 and corrs_freq <= 4186:
+        filtered_spectrogram.append(spectrogram_to_use[i])
+    else:
+        filtered_spectrogram.append([0] * len(spectrogram_to_use[i]))
+filtered_spectrogram = np.array(filtered_spectrogram)
+
+# Per time interval, get max frequencies
+transposed_spectrogram = filtered_spectrogram.T
+all_maxes = []
+remove_zeros = True
+for p_gram in transposed_spectrogram:
+    if remove_zeros:
+        p_gram = [i for i in p_gram if i != 0.]
+        if p_gram.size == 0:
+            continue    # TODO: Check if this is correct.
+    # TODO: Incorporate some percentile check
+    index_max = np.argmax(p_gram)   # This is constrained from (0, 129): freq.
+    f_max = freq_mapping.get(index_max)
+    all_maxes.append(f_max)
+
+
+# {EXPLORATION} Plot all the max frequencies
+plt.figure(figsize=(12, 8))
+plt.plot(all_maxes[1:10])
+_ = plt.hist(all_maxes, bins=100)
+
+# IDEA: Time sig. could be an input
+# Plot all the unique notes (no rests or anything)
+max_notes = [i for i in map(
+    frequency_to_note, all_maxes) if i != 'Impossible-1']
+all_unique_notes = set(max_notes)
+plot_note_series(all_unique_notes)
 
 {
     """
