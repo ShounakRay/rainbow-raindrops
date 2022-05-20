@@ -3,7 +3,7 @@
 # @Email:  shounak@stanford.edu
 # @Filename: playground.py
 # @Last modified by:   shounak
-# @Last modified time: 2022-05-20T04:09:24-07:00
+# @Last modified time: 2022-05-20T04:23:03-07:00
 
 import collections
 import numpy as np
@@ -12,7 +12,6 @@ import librosa.display
 import librosa
 import math
 import matplotlib.pyplot as plt
-import seaborn as sns
 from scipy import signal
 from sklearn.preprocessing import MinMaxScaler
 from music21 import note, stream
@@ -65,22 +64,12 @@ _ = """########################################################################
 ################################ HYPERPARAMETERS ##############################
 ############################################################################"""
 
-CODEC_MAPPING = {'mp4': 'libx264',
-                 'ogv': 'libtheora',
-                 'webm': 'libvpx',
-                 'ogg': 'libvorbis',
-                 'mp3': 'pcm_s16le',
-                 'wav': 'libvorbis',
-                 'm4a': 'libfdk_aac'}
-PIANO_RANGE = (27, 4186)
+PIANO_RANGE = (27.5, 4186)
 SENTINEL_OOB = -1
 
 _ = """########################################################################
 ################################## DEFINTIONS #################################
 ############################################################################"""
-
-# def isfile(fname):
-#     return os.path.isfile(fname)
 
 
 def frequency_to_note(frequency):
@@ -112,7 +101,8 @@ def frequency_to_note(frequency):
     """
     using the distance in notes and the octave and name of the known note,
     we can calculate the octave and name of our note
-    NOTE: the "absolute index" doesn't have any actual meaning, since it doesn't care what its zero point is. it is just useful for calculation
+    NOTE: the "absolute index" doesn't have any actual meaning, since it
+    doesn't care what its zero point is. it is just useful for calculation
     """
     known_note_index_in_octave = NOTES.index(KNOWN_NOTE_NAME)
     known_note_absolute_index = KNOWN_NOTE_OCTAVE * \
@@ -140,7 +130,7 @@ def plot_waveform(waveform):
 
 
 def librosa_plot_spectrogram(waveform):
-    """ LIBROSA METHOD """
+    """LIBROSA METHOD."""
     STFT_waveform = librosa.stft(waveform)  # STFT of y
     STFT_DB_waveform = librosa.amplitude_to_db(
         np.abs(STFT_waveform), ref=np.max)
@@ -165,7 +155,8 @@ def util_fill_in_gaps(notes_captured):
         prev_index = next_index
         prev_note = next_note
     # Remember, mapping is reversed!!
-    return collections.OrderedDict(sorted(notes_captured.items(), reverse=True))
+    return collections.OrderedDict(sorted(notes_captured.items(),
+                                          reverse=True))
 
 
 def librosa_plot_chroma(waveform, sampling_rate):
@@ -192,31 +183,6 @@ def librosa_plot_chroma(waveform, sampling_rate):
     return extracted_data, cont_notes_captured
 
 
-def plot_spectrogram(waveform, sampling_rate):
-    fig, ax = plt.subplots(figsize=(18, 15))
-    cmap = plt.get_cmap('viridis')
-    spectrum, row_freqs, col_mpoints, cax = plt.specgram(
-        waveform, Fs=sampling_rate, cmap=cmap, mode='magnitude', NFFT=256,
-        scale='dB')
-    plt.xlabel('Time')
-    plt.ylabel('Frequency (Hz)')
-    cbar = fig.colorbar(cax)
-    cbar.set_label('Amplitude', rotation=270)
-    return spectrum, row_freqs, col_mpoints
-
-
-def plot_modified_spectrogram(spectrum, PIANO_RANGE=PIANO_RANGE, masked=True,
-                              skip_modify=False, tuning=0.1):
-    spectrum = np.flipud(spectrum)
-    _ = plt.figure(figsize=(18, 15))
-    if not skip_modify:
-        spectrum = spectrum ** tuning
-        if masked:
-            spectrum = spectrum[PIANO_RANGE[0]:PIANO_RANGE[1], :]
-    _ = sns.heatmap(spectrum)
-    return spectrum
-
-
 def util_normalize(data, range=(0, 1)):
     scaler = MinMaxScaler(feature_range=(range[0], range[1]))
     res = scaler.fit_transform(data.reshape(-1, 1))
@@ -241,10 +207,6 @@ def plot_note_series(series_of_notes):
         stream1.append(n_obj)
     stream1.show()
 
-# def plot_entire_freq_hist(spectrum):
-#     _ = plt.figure(figsize=(25, 15))
-#     _ = plt.plot(spectrum)
-
 
 _ = """########################################################################
 ################################# CORE EXECUTION ##############################
@@ -262,36 +224,25 @@ waveform, sampling_rate = librosa.load(output_path)
 """ EXPLORATORY ANALYSIS """
 plot_waveform(waveform)
 STFT_DB_waveform = librosa_plot_spectrogram(waveform)
-# spectrum, row_freqs, col_mpoints = plot_spectrogram(waveform, sampling_rate)
-# plot_entire_freq_hist(spectrum)
+
 original_chroma, index_mapping = librosa_plot_chroma(waveform, sampling_rate)
 """ END """
 
 """ ACTUAL PROCESSING """
 frequencies, times, spectrogram = signal.spectrogram(waveform, sampling_rate)
 
-# > Yet another spectrogram plot
-# _ = plt.figure(figsize=(12, 30))
-# _ = plt.pcolormesh(times, frequencies, spectrogram)
-# # plt.imshow(spectrogram)
-# plt.ylabel('Frequency [Hz]')
-# plt.xlabel('Time [sec]')
-# plt.show()
-# _ = plt.figure(figsize=(12, 30))
-# _ = sns.heatmap(np.flipud(spectrogram))
-
-# Mapping of (0, 129) to actual Hz markings
+# Mapping of (0, 129) to actual (0, 10000) Hz markings
 spectrogram_to_use = np.flipud(spectrogram)
 spect_indices = np.array([i for i in range(len(spectrogram_to_use))])
 normalized = util_normalize(
     spect_indices, (min(frequencies), max(frequencies)))
 freq_mapping = dict(zip(spect_indices, normalized))
 
-# Ignore all data (0-out) outside of piano range
+# Ignore all data outside of possible piano range
 filtered_spectrogram = []
 for i in range(len(spectrogram_to_use)):
     corrs_freq = freq_mapping.get(i)
-    if corrs_freq >= 27.5 and corrs_freq <= 4186:
+    if corrs_freq >= PIANO_RANGE[0] and corrs_freq <= PIANO_RANGE[1]:
         filtered_spectrogram.append(spectrogram_to_use[i])
     else:
         filtered_spectrogram.append([0] * len(spectrogram_to_use[i]))
@@ -311,47 +262,21 @@ for p_gram in transposed_spectrogram:
     f_max = freq_mapping.get(index_max)
     all_maxes.append(f_max)
 
-
 # {EXPLORATION} Plot all the max frequencies
 plt.figure(figsize=(12, 8))
 plt.plot(all_maxes[1:10])
 _ = plt.hist(all_maxes, bins=100)
 
-# IDEA: Time sig. could be an input
 # Plot all the unique notes (no rests or anything)
 max_notes = [i for i in map(
     frequency_to_note, all_maxes) if i != 'Impossible-1']
 all_unique_notes = set(max_notes)
 plot_note_series(all_unique_notes)
 
-{
-    """
-modified_spectrum = plot_modified_spectrogram(
-    spectrum, masked=True, skip_modify=False, tuning=0.10)
+# http://bspaans.github.io/python-mingus/doc/wiki/tutorialNote.html
+# https://web.mit.edu/music21/doc/usersGuide/usersGuide_04_stream1.html
+# TODO: Modularize function defintions
+# TODO: De-sensitize max identification.
+# IDEA: Time sig. could be an input for sheet-music. makes life easier.
 
-modified_spectrum.transpose().mean(axis=1)
-
-
-def weighted_periodogram_freq(modified_spectrum):
-    usable_matrix = modified_spectrum.transpose()
-    for t_gram in usable_matrix:
-        for i in range(len(t_gram)):
-            t_gram[i] *= i
-
-
-_ = plot_modified_spectrogram(usable_matrix.transpose(), masked=True)
-"""
-    """ UNUSED ATM.
-# 3. Run the default beat tracker
-tempo, beat_frames = librosa.beat.beat_track(y=waveform, sr=sampling_rate)
-
-print('Estimated tempo: {:.2f} beats per minute'.format(tempo))
-
-# 4. Convert the frame indices of beat events into timestamps
-beat_times = librosa.frames_to_time(beat_frames, sr=sampling_rate)
-
-plt.figure(figsize=(12, 8))
-_ = plt.hist(beat_frames, bins=100)
-"""
-}
 # EOF
