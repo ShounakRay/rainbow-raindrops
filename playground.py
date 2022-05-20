@@ -3,7 +3,7 @@
 # @Email:  shounak@stanford.edu
 # @Filename: playground.py
 # @Last modified by:   shounak
-# @Last modified time: 2022-05-20T01:12:31-07:00
+# @Last modified time: 2022-05-20T01:15:46-07:00
 
 import collections
 import numpy as np
@@ -46,6 +46,15 @@ Objective: Go from audio/video recording to:
 – Visualize accordingly
 – Transcribe into sheet music (once delineation is complete)
 – For differentation, include live-streaming version.
+
+Specific process:
+1. Import file.
+2. Get waveform and sampling rate
+3. Produce spectrogram
+4. Identify notes from spectrogram (use some probability)
+5. Manually categorize RH and LH for first 5 (useful) seconds (our priors)
+6. Based on priors and additional assumptions, separate hands for rest of piece
+7. Generate visualizations + sheet music. Switch between minor and major, etc.
 """
 
 _ = """########################################################################
