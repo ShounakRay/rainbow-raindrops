@@ -3,9 +3,21 @@
 # @Email:  shounak@stanford.edu
 # @Filename: playground.py
 # @Last modified by:   shounak
-# @Last modified time: 2022-05-19T00:22:01-07:00
+# @Last modified time: 2022-05-20T01:12:31-07:00
 
-""" IMPORTANT NOTES:
+import collections
+import numpy as np
+from math import log2, pow
+import subprocess
+import librosa.display
+import librosa
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+_ = """########################################################################
+############################### INSTALLATION NOTES ############################
+############################################################################"""
+"""
 > librosa has numba as a dependency. To use librosa, we must install the arm64
 > version of numba. To do this, we ran the command:
 > arch -arm64 pip install numba --no-binary :all:
@@ -24,19 +36,21 @@
 
 """
 
-# TODO: Masking is wrong. Should not be by decibel.
+_ = """########################################################################
+#################################### PLANNING #################################
+############################################################################"""
+"""
+Objective: Go from audio/video recording to:
+– Cool and meaningful visualization of music
+– Split different voices based on conditional probabilities (bayes thm.)
+– Visualize accordingly
+– Transcribe into sheet music (once delineation is complete)
+– For differentation, include live-streaming version.
+"""
 
-import seaborn as sns
-import matplotlib.pyplot as plt
-# import mutagen
-import librosa
-import librosa.display
-import subprocess
-from IPython.display import Audio
-from math import log2, pow
-import numpy as np
-import collections
-# import os
+_ = """########################################################################
+################################ HYPERPARAMETERS ##############################
+############################################################################"""
 
 CODEC_MAPPING = {'mp4': 'libx264',
                  'ogv': 'libtheora',
@@ -47,13 +61,16 @@ CODEC_MAPPING = {'mp4': 'libx264',
                  'm4a': 'libfdk_aac'}
 PIANO_RANGE = (27, 4186)
 
+_ = """########################################################################
+################################## DEFINTIONS #################################
+############################################################################"""
 
 # def isfile(fname):
 #     return os.path.isfile(fname)
 
 
-def get_note():
-    """ https://www.johndcook.com/blog/2016/02/10/musical-pitch-notation/ """
+def get_note(freq):
+    """https://www.johndcook.com/blog/2016/02/10/musical-pitch-notation/."""
     A4 = 440
     C0 = A4 * pow(2, -4.75)
     NAME = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
@@ -109,8 +126,9 @@ def util_fill_in_gaps(notes_captured):
 def librosa_plot_chroma(waveform, sampling_rate):
     chroma = librosa.feature.chroma_cqt(y=waveform, sr=sampling_rate)
     fig, ax = plt.subplots(figsize=(18, 15))
-    img = librosa.display.specshow(
-        chroma, y_axis='chroma', x_axis='time', ax=ax)
+    img = librosa.display.specshow(chroma,
+                                   y_axis='chroma', x_axis='time',
+                                   ax=ax)
     ax.set(title='Chromagram demonstration')
     fig.colorbar(img, ax=ax)
 
@@ -133,7 +151,8 @@ def plot_spectrogram(waveform, sampling_rate):
     fig, ax = plt.subplots(figsize=(18, 15))
     cmap = plt.get_cmap('viridis')
     spectrum, row_freqs, col_mpoints, cax = plt.specgram(
-        waveform, Fs=sampling_rate, cmap=cmap, mode='magnitude', NFFT=256, scale='dB')
+        waveform, Fs=sampling_rate, cmap=cmap, mode='magnitude', NFFT=256,
+        scale='dB')
     plt.xlabel('Time')
     plt.ylabel('Frequency (Hz)')
     cbar = fig.colorbar(cax)
@@ -141,7 +160,8 @@ def plot_spectrogram(waveform, sampling_rate):
     return spectrum, row_freqs, col_mpoints
 
 
-def plot_modified_spectrogram(spectrum, PIANO_RANGE=PIANO_RANGE, masked=True, skip_modify=False, tuning=0.1):
+def plot_modified_spectrogram(spectrum, PIANO_RANGE=PIANO_RANGE, masked=True,
+                              skip_modify=False, tuning=0.1):
     spectrum = np.flipud(spectrum)
     _ = plt.figure(figsize=(18, 15))
     if not skip_modify:
@@ -157,12 +177,15 @@ def plot_entire_freq_hist(spectrum):
     _ = plt.plot(spectrum)
 
 
+_ = """########################################################################
+################################# CORE EXECUTION ##############################
+############################################################################"""
+
 # 1. Get the file path to an included audio example
 # filename = librosa.example('nutcracker')
 fname = 'piano_A_sharp'
 output_path = convert_file(input_path=f'music_files/{fname}.mp3',
                            output_path=f'music_files/converted-{fname}.wav')
-
 
 # 2. Load the audio as a waveform `y`
 #    Store the sampling rate as `sr`
@@ -177,7 +200,9 @@ STFT_DB_waveform = librosa_plot_spectrogram(waveform)
 
 original_chroma, index_mapping = librosa_plot_chroma(waveform, sampling_rate)
 
-"""
+
+{
+    """
 modified_spectrum = plot_modified_spectrogram(
     spectrum, masked=True, skip_modify=False, tuning=0.10)
 
@@ -193,10 +218,7 @@ def weighted_periodogram_freq(modified_spectrum):
 
 _ = plot_modified_spectrogram(usable_matrix.transpose(), masked=True)
 """
-
-# TODO: Find most common notes in time-interval. Play around with window. Use a clean file.
-
-"""
+    """ UNUSED ATM.
 # 3. Run the default beat tracker
 tempo, beat_frames = librosa.beat.beat_track(y=waveform, sr=sampling_rate)
 
@@ -208,5 +230,5 @@ beat_times = librosa.frames_to_time(beat_frames, sr=sampling_rate)
 plt.figure(figsize=(12, 8))
 _ = plt.hist(beat_frames, bins=100)
 """
-
+}
 # EOF
