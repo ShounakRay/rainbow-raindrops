@@ -3,7 +3,7 @@
 # @Email:  shounak@stanford.edu
 # @Filename: playground.py
 # @Last modified by:   shounak
-# @Last modified time: 2022-05-20T04:23:03-07:00
+# @Last modified time: 2022-05-24T00:55:32-07:00
 
 import collections
 import numpy as np
@@ -255,7 +255,7 @@ remove_zeros = True
 for p_gram in transposed_spectrogram:
     if remove_zeros:
         p_gram = [i for i in p_gram if i != 0.]
-        if p_gram.size == 0:
+        if len(p_gram) == 0:
             continue    # TODO: Check if this is correct.
     # TODO: Incorporate some percentile check
     index_max = np.argmax(p_gram)   # This is constrained from (0, 129): freq.
@@ -270,6 +270,7 @@ _ = plt.hist(all_maxes, bins=100)
 # Plot all the unique notes (no rests or anything)
 max_notes = [i for i in map(
     frequency_to_note, all_maxes) if i != 'Impossible-1']
+sorted(collections.Counter(max_notes).items(), key=lambda x: x[1])
 all_unique_notes = set(max_notes)
 plot_note_series(all_unique_notes)
 
